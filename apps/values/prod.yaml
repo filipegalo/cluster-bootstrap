@@ -17,10 +17,10 @@ argocdRepoSecret:
   enabled: true
 
 kubePrometheusStack:
-  enabled: true
+  enabled: false
 
 reloader:
-  enabled: true
+  enabled: trufalsee
 
 trivyOperator:
-  enabled: true
+  enabled: false

@@ -1,0 +1,16 @@
+trivy-operator:
+  operator:
+    scanJobsConcurrentLimit: 2
+    resources:
+      requests:
+        cpu: 10m
+        memory: 64Mi
+      limits:
+        memory: 128Mi
+  trivy:
+    resources:
+      requests:
+        cpu: 50m
+        memory: 100Mi
+      limits:
+        memory: 256Mi

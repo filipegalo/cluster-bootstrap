@@ -1,0 +1,6 @@
+trivy-operator:
+  trivy:
+    ignoreUnfixed: true
+  operator:
+    scanJobsConcurrentLimit: 3
+    scannerReportTTL: "24h"

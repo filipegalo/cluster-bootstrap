@@ -21,3 +21,6 @@ kubePrometheusStack:
 
 reloader:
   enabled: true
+
+trivyOperator:
+  enabled: true

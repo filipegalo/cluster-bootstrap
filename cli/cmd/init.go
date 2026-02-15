@@ -9,8 +9,8 @@ import (
 	"github.com/spf13/cobra"
 	"gopkg.in/yaml.v3"
 
-	"github.com/user-cube/cluster-bootstrap/cli/internal/config"
-	"github.com/user-cube/cluster-bootstrap/cli/internal/sops"
+	"github.com/user-cube/cluster-bootstrap/cluster-bootstrap/internal/config"
+	"github.com/user-cube/cluster-bootstrap/cluster-bootstrap/internal/sops"
 )
 
 var (
@@ -223,44 +223,6 @@ func promptEnvironmentSecrets(env string) (*config.EnvironmentSecrets, error) {
 			TargetRevision: targetRevision,
 			SSHPrivateKey:  string(sshKeyData),
 		},
-	}
-
-	// Optional: Vault configuration
-	var configureVault bool
-	err = huh.NewConfirm().
-		Title("Configure Vault secrets?").
-		Value(&configureVault).
-		Run()
-	if err != nil {
-		return nil, fmt.Errorf("prompt failed: %w", err)
-	}
-
-	if configureVault {
-		vaultAddress := "http://vault.vault.svc:8200"
-		var vaultToken string
-
-		vaultForm := huh.NewForm(
-			huh.NewGroup(
-				huh.NewInput().
-					Title("Vault address").
-					Value(&vaultAddress).
-					Validate(requiredValidator("vault address is required")),
-				huh.NewInput().
-					Title("Vault token").
-					EchoMode(huh.EchoModePassword).
-					Value(&vaultToken).
-					Validate(requiredValidator("vault token is required")),
-			),
-		)
-
-		if err := vaultForm.Run(); err != nil {
-			return nil, fmt.Errorf("prompt failed: %w", err)
-		}
-
-		envSecrets.Vault = config.VaultSecrets{
-			Address: vaultAddress,
-			Token:   vaultToken,
-		}
 	}
 
 	return envSecrets, nil

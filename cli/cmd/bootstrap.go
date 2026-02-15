@@ -9,9 +9,10 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/user-cube/cluster-bootstrap/cli/internal/config"
-	"github.com/user-cube/cluster-bootstrap/cli/internal/k8s"
-	"github.com/user-cube/cluster-bootstrap/cli/internal/sops"
+	"github.com/user-cube/cluster-bootstrap/cluster-bootstrap/internal/config"
+	"github.com/user-cube/cluster-bootstrap/cluster-bootstrap/internal/helm"
+	"github.com/user-cube/cluster-bootstrap/cluster-bootstrap/internal/k8s"
+	"github.com/user-cube/cluster-bootstrap/cluster-bootstrap/internal/sops"
 )
 
 var (
@@ -72,9 +73,6 @@ func runBootstrap(cmd *cobra.Command, args []string) error {
 	if verbose {
 		fmt.Printf("  Repo URL: %s\n", envSecrets.Repo.URL)
 		fmt.Printf("  Target revision: %s\n", envSecrets.Repo.TargetRevision)
-		if envSecrets.Vault.Address != "" {
-			fmt.Printf("  Vault address: %s\n", envSecrets.Vault.Address)
-		}
 	}
 
 	if dryRun {
@@ -89,21 +87,8 @@ func runBootstrap(cmd *cobra.Command, args []string) error {
 
 	ctx := context.Background()
 
-	// Step 4: Install ArgoCD
-	if !skipArgoCDInstall {
-		fmt.Println("==> Installing ArgoCD...")
-		if err := client.InstallArgoCD(ctx, verbose); err != nil {
-			return fmt.Errorf("failed to install ArgoCD: %w", err)
-		}
-
-		fmt.Println("==> Waiting for ArgoCD to be ready...")
-		if err := client.WaitForArgoCD(ctx, verbose); err != nil {
-			return fmt.Errorf("ArgoCD not ready: %w", err)
-		}
-	}
-
-	// Step 5: Create Kubernetes secrets
-	fmt.Println("==> Creating SSH repo credentials secret...")
+	// Step 4: Create Kubernetes secrets (before Helm install, as the chart may reference them)
+	fmt.Println("==> Creating Kubernetes secrets...")
 	if err := client.EnsureNamespace(ctx, "argocd"); err != nil {
 		return err
 	}
@@ -111,10 +96,11 @@ func runBootstrap(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	if envSecrets.Vault.Token != "" {
-		fmt.Println("==> Creating Vault token secret...")
-		if _, err := client.CreateVaultTokenSecret(ctx, envSecrets.Vault.Address, envSecrets.Vault.Token, false); err != nil {
-			return err
+	// Step 5: Install ArgoCD via Helm
+	if !skipArgoCDInstall {
+		fmt.Println("==> Installing ArgoCD via Helm...")
+		if err := helm.InstallArgoCD(ctx, kubeconfig, kubeContext, env, verbose); err != nil {
+			return fmt.Errorf("failed to install ArgoCD: %w", err)
 		}
 	}
 
@@ -161,29 +147,6 @@ func printDryRun(envSecrets *config.EnvironmentSecrets, env string) error {
 		},
 	}
 	printYAMLish(repoSecret)
-
-	// Vault secret
-	if envSecrets.Vault.Token != "" {
-		fmt.Println("---")
-		vaultSecret := map[string]interface{}{
-			"apiVersion": "v1",
-			"kind":       "Secret",
-			"metadata": map[string]interface{}{
-				"name":      "vault-token",
-				"namespace": "vault",
-				"annotations": map[string]string{
-					"cluster-bootstrap/origin":     "bootstrap",
-					"cluster-bootstrap/managed-by": "external-secrets",
-				},
-			},
-			"type": "Opaque",
-			"stringData": map[string]string{
-				"address": envSecrets.Vault.Address,
-				"token":   envSecrets.Vault.Token,
-			},
-		}
-		printYAMLish(vaultSecret)
-	}
 
 	// App of Apps
 	fmt.Println("---")

@@ -5,7 +5,7 @@ import (
 
 	"gopkg.in/yaml.v3"
 
-	"github.com/user-cube/cluster-bootstrap/cli/internal/sops"
+	"github.com/user-cube/cluster-bootstrap/cluster-bootstrap/internal/sops"
 )
 
 // SecretsFile represents the top-level structure of secrets.enc.yaml.
@@ -15,8 +15,7 @@ type SecretsFile struct {
 
 // EnvironmentSecrets holds the secrets for a single environment.
 type EnvironmentSecrets struct {
-	Repo  RepoSecrets  `yaml:"repo"`
-	Vault VaultSecrets `yaml:"vault,omitempty"`
+	Repo RepoSecrets `yaml:"repo"`
 }
 
 // RepoSecrets holds git repository credentials.
@@ -24,12 +23,6 @@ type RepoSecrets struct {
 	URL            string `yaml:"url"`
 	TargetRevision string `yaml:"targetRevision"`
 	SSHPrivateKey  string `yaml:"sshPrivateKey"`
-}
-
-// VaultSecrets holds Vault connection details.
-type VaultSecrets struct {
-	Address string `yaml:"address,omitempty"`
-	Token   string `yaml:"token,omitempty"`
 }
 
 // ValidEnvironments lists the allowed environment names.

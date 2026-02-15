@@ -70,7 +70,7 @@ The `apps/values/<env>.yaml` files control which components are enabled:
 ```yaml
 environment: dev
 repo:
-  url: git@github.com:user-cube/cluster-bootstrap.git
+  url: git@github.com:filipegalo/cluster-bootstrap.git
   targetRevision: main
 argocd:
   enabled: true

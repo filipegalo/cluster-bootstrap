@@ -15,7 +15,7 @@ This is a custom chart with no upstream dependency — it only contains custom t
 - Provider type: `vault`
 - Vault KV path for SSH key
 - Kubernetes auth configuration for Vault
-- Repository URL: `git@github.com:user-cube/cluster-bootstrap.git`
+- Repository URL: `git@github.com:filipegalo/cluster-bootstrap.git`
 
 **Per-environment:**
 

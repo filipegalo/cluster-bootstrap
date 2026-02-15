@@ -106,7 +106,7 @@ func runInit(cmd *cobra.Command, args []string) error {
 func promptEnvironmentSecrets(env string) (*config.EnvironmentSecrets, error) {
 	fmt.Printf("\n--- Environment: %s ---\n", env)
 
-	repoURL := "git@github.com:user-cube/cluster-bootstrap.git"
+	repoURL := "git@github.com:filipegalo/cluster-bootstrap.git"
 	targetRevision := "main"
 	var sshKeyPath string
 

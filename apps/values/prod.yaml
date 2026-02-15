@@ -1,7 +1,7 @@
 environment: prod
 
 repo:
-  url: git@github.com:user-cube/cluster-bootstrap.git
+  url: git@github.com:filipegalo/cluster-bootstrap.git
   targetRevision: main
 
 argocd:
@@ -11,7 +11,7 @@ externalSecrets:
   enabled: true
 
 vault:
-  enabled: true
+  enabled: false
 
 argocdRepoSecret:
   enabled: true

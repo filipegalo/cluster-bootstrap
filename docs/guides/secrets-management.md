@@ -53,7 +53,7 @@ Each environment has a `secrets.<env>.yaml` file containing:
 
 ```yaml
 repo:
-  url: git@github.com:user-cube/cluster-bootstrap.git
+  url: git@github.com:filipegalo/cluster-bootstrap.git
   targetRevision: main
   sshPrivateKey: |
     -----BEGIN OPENSSH PRIVATE KEY-----

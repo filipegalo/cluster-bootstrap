@@ -11,7 +11,7 @@ This repo provides a fully automated, reproducible way to bootstrap a Kubernetes
 - **App of Apps pattern** — ArgoCD manages itself and all components from a single root Application
 - **Sync wave ordering** — components deploy in the correct dependency order
 - **Multi-environment support** — dev, staging, and prod configurations with cascading values
-- **Secrets management** — SOPS + age encryption with Vault and External Secrets Operator integration
+- **Secrets management** — git-crypt encryption with Vault and External Secrets Operator integration
 - **CLI tool** — Go-based CLI automates the entire bootstrap process
 
 ## Components

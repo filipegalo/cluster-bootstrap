@@ -1,6 +1,6 @@
 # Secrets Management
 
-This repo uses a multi-layer secrets architecture: SOPS for encryption at rest, Vault for runtime secrets storage, and External Secrets Operator for syncing secrets into Kubernetes.
+This repo uses a multi-layer secrets architecture: git-crypt for encryption at rest in Git, Vault for runtime secrets storage, and External Secrets Operator for syncing secrets into Kubernetes.
 
 ## Overview
 
@@ -8,9 +8,10 @@ This repo uses a multi-layer secrets architecture: SOPS for encryption at rest, 
 ┌─────────────────────────────────────────────────────────┐
 │                    Developer Machine                      │
 │                                                           │
-│  secrets.dev.enc.yaml ──(SOPS + age)──> plaintext YAML   │
+│  secrets.<env>.yaml (git-crypt: decrypt with git-crypt   │
+│  unlock; files are encrypted in the Git repo)             │
 │                                                           │
-│  CLI bootstrap reads decrypted secrets and:               │
+│  CLI bootstrap reads secrets and:                         │
 │    1. Creates repo-ssh-key Secret in argocd namespace     │
 │    2. Vault seed job copies SSH key into Vault KV         │
 └─────────────────────────────────────────────────────────┘
@@ -32,25 +33,23 @@ This repo uses a multi-layer secrets architecture: SOPS for encryption at rest, 
 └─────────────────────────────────────────────────────────┘
 ```
 
-## SOPS + Age Encryption
+## git-crypt
 
-[SOPS](https://github.com/getsops/sops) encrypts YAML files so secrets can be stored in Git safely. This repo uses [age](https://github.com/FiloSottile/age) as the encryption backend.
+[git-crypt](https://github.com/AGWA/git-crypt) transparently encrypts files in the Git repository. Files matching the patterns in `.gitattributes` are stored encrypted in the repo and decrypted in your working tree when you run `git-crypt unlock`.
 
 ### Configuration
 
-`.sops.yaml` defines encryption rules:
+`.gitattributes` defines which files are encrypted:
 
-```yaml
-creation_rules:
-  - path_regex: \.enc\.yaml$
-    age: age1wj3m2ayk4a8nwxc8r678l06q4h4xxa0gqa2l6eyqf037wcdgxaqqla9fr8
+```
+secrets.*.yaml filter=git-crypt diff=git-crypt
 ```
 
-Any file matching `*.enc.yaml` will be encrypted with the specified age public key.
+Any file matching `secrets.*.yaml` will be encrypted by git-crypt when committed.
 
-### Encrypted secrets structure
+### Secrets file structure
 
-Each environment has a `secrets.<env>.enc.yaml` file containing:
+Each environment has a `secrets.<env>.yaml` file containing:
 
 ```yaml
 repo:
@@ -65,25 +64,29 @@ repo:
 ### Working with encrypted files
 
 ```bash
-# Decrypt a file (requires age-key.txt)
-SOPS_AGE_KEY_FILE=./age-key.txt sops -d secrets.dev.enc.yaml
+# Initialize git-crypt in the repo (first time only)
+git-crypt init
 
-# Encrypt a plaintext file
-sops -e secrets.dev.yaml > secrets.dev.enc.yaml
+# Add a GPG user or symmetric key (see git-crypt documentation)
+git-crypt add-gpg-user USER_ID
+# or: git-crypt export-key ./key && git-crypt unlock ./key
 
-# Edit in-place
-SOPS_AGE_KEY_FILE=./age-key.txt sops secrets.dev.enc.yaml
+# Unlock the repo so secrets.*.yaml are decrypted on disk
+git-crypt unlock
+
+# Lock the repo (secrets appear encrypted again in working tree)
+git-crypt lock
 ```
 
 ### Initialize with the CLI
 
-The `init` command sets up SOPS and creates encrypted secrets interactively:
+The `init` command sets up `.gitattributes` for git-crypt and creates per-environment secrets files interactively:
 
 ```bash
-./cli/cluster-bootstrap init --provider age --age-key-file ./age-key.txt
+./cli/cluster-bootstrap init --output-dir .
 ```
 
-This supports age, AWS KMS, and GCP KMS as encryption providers.
+If the repo is not yet using git-crypt, run `git-crypt init` in the repo root. Then add your key (GPG user or symmetric key) and commit. Secrets files will be encrypted when you commit.
 
 ## Vault Integration
 

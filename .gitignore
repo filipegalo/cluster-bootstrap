@@ -17,12 +17,9 @@ secrets/
 
 # Binaries
 cli/cluster-bootstrap
-*.enc.yaml
-.sops.yaml
 
-# Sops
-age-key.txt
-repo-ssh-key.pem
+# git-crypt symmetric key (keep out of repo)
+git-crypt-key
 .env
 
 # MkDocs

@@ -10,67 +10,37 @@ import (
 	"gopkg.in/yaml.v3"
 
 	"github.com/user-cube/cluster-bootstrap/cluster-bootstrap/internal/config"
-	"github.com/user-cube/cluster-bootstrap/cluster-bootstrap/internal/sops"
 )
 
 var (
-	provider   string
-	ageKeyFile string
-	kmsARN     string
-	gcpKMSKey  string
-	outputDir  string
+	outputDir string
 )
 
 var initCmd = &cobra.Command{
 	Use:   "init",
-	Short: "Interactive setup to create .sops.yaml and per-environment secrets files",
-	Long: `Interactively configure SOPS encryption and create encrypted secrets files.
-Prompts for the SOPS provider, encryption key, and per-environment secrets.
-Each environment gets its own file: secrets.<env>.enc.yaml`,
+	Short: "Interactive setup for git-crypt and per-environment secrets files",
+	Long: `Interactively configure git-crypt and create per-environment secrets files.
+Ensures .gitattributes includes secrets.*.yaml for git-crypt. Creates plaintext
+secrets.<env>.yaml files that git-crypt will encrypt when committed.
+Run 'git-crypt init' in the repo first if you have not already.`,
 	RunE: runInit,
 }
 
 func init() {
-	initCmd.Flags().StringVar(&provider, "provider", "", "SOPS provider (age|aws-kms|gcp-kms)")
-	initCmd.Flags().StringVar(&ageKeyFile, "age-key-file", "", "path to age public key file (for age provider)")
-	initCmd.Flags().StringVar(&kmsARN, "kms-arn", "", "AWS KMS key ARN (for aws-kms provider)")
-	initCmd.Flags().StringVar(&gcpKMSKey, "gcp-kms-key", "", "GCP KMS key resource ID (for gcp-kms provider)")
-	initCmd.Flags().StringVar(&outputDir, "output-dir", ".", "directory for encrypted secrets files")
+	initCmd.Flags().StringVar(&outputDir, "output-dir", ".", "directory for secrets files and .gitattributes")
 
 	rootCmd.AddCommand(initCmd)
 }
 
 func runInit(cmd *cobra.Command, args []string) error {
-	// Step 1: Select SOPS provider
-	if provider == "" {
-		err := huh.NewSelect[string]().
-			Title("Select SOPS provider").
-			Options(
-				huh.NewOption("age", "age"),
-				huh.NewOption("AWS KMS", "aws-kms"),
-				huh.NewOption("GCP KMS", "gcp-kms"),
-			).
-			Value(&provider).
-			Run()
-		if err != nil {
-			return fmt.Errorf("prompt failed: %w", err)
-		}
+	// Step 1: Ensure .gitattributes has git-crypt pattern for secrets.*.yaml
+	gitattributesPath := filepath.Join(outputDir, ".gitattributes")
+	if err := config.EnsureGitCryptAttributes(outputDir); err != nil {
+		return fmt.Errorf("failed to update .gitattributes: %w", err)
 	}
+	fmt.Printf("Updated %s (secrets.*.yaml → git-crypt)\n", gitattributesPath)
 
-	// Step 2: Get encryption key
-	key, err := getProviderKey(provider)
-	if err != nil {
-		return err
-	}
-
-	// Step 3: Write .sops.yaml
-	sopsConfigPath := filepath.Join(outputDir, ".sops.yaml")
-	if err := config.WriteSopsConfig(sopsConfigPath, provider, key); err != nil {
-		return err
-	}
-	fmt.Printf("Created %s\n", sopsConfigPath)
-
-	// Step 4: Prompt for environment names and create per-environment secrets files
+	// Step 2: Prompt for environment names and create per-environment secrets files
 	created := 0
 	for {
 		var env string
@@ -105,28 +75,16 @@ func runInit(cmd *cobra.Command, args []string) error {
 			return err
 		}
 
-		// Step 5: Write plaintext YAML to temp file, encrypt with SOPS
-		plaintextData, err := yaml.Marshal(envSecrets)
+		data, err := yaml.Marshal(envSecrets)
 		if err != nil {
 			return fmt.Errorf("failed to marshal secrets: %w", err)
 		}
 
-		tmpFile := filepath.Join(outputDir, ".tmp.enc.yaml")
-		if err := os.WriteFile(tmpFile, plaintextData, 0600); err != nil {
-			return fmt.Errorf("failed to write temp file: %w", err)
-		}
-
-		encrypted, err := sops.Encrypt(tmpFile, nil)
-		os.Remove(tmpFile)
-		if err != nil {
-			return fmt.Errorf("failed to encrypt secrets for %s: %w", env, err)
-		}
-
-		if err := os.WriteFile(outputFile, encrypted, 0600); err != nil {
+		if err := os.WriteFile(outputFile, data, 0600); err != nil {
 			return fmt.Errorf("failed to write %s: %w", outputFile, err)
 		}
 
-		fmt.Printf("Created %s (encrypted)\n", outputFile)
+		fmt.Printf("Created %s (unlock repo with git-crypt to decrypt; files are encrypted in Git)\n", outputFile)
 		created++
 	}
 
@@ -134,65 +92,10 @@ func runInit(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("no environments configured")
 	}
 
-	fmt.Println("\nYou can now run: cluster-bootstrap bootstrap <environment>")
+	fmt.Println("\nIf the repo is not yet using git-crypt, run: git-crypt init")
+	fmt.Println("Then run: cluster-bootstrap bootstrap <environment>")
 
 	return nil
-}
-
-func getProviderKey(provider string) (string, error) {
-	switch provider {
-	case "age":
-		if ageKeyFile != "" {
-			data, err := os.ReadFile(ageKeyFile)
-			if err != nil {
-				return "", fmt.Errorf("failed to read age key file: %w", err)
-			}
-			return string(data), nil
-		}
-		var key string
-		err := huh.NewInput().
-			Title("Enter age public key (age1...)").
-			Value(&key).
-			Validate(requiredValidator("age public key is required")).
-			Run()
-		if err != nil {
-			return "", fmt.Errorf("prompt failed: %w", err)
-		}
-		return key, nil
-
-	case "aws-kms":
-		if kmsARN != "" {
-			return kmsARN, nil
-		}
-		var key string
-		err := huh.NewInput().
-			Title("Enter AWS KMS key ARN").
-			Value(&key).
-			Validate(requiredValidator("KMS ARN is required")).
-			Run()
-		if err != nil {
-			return "", fmt.Errorf("prompt failed: %w", err)
-		}
-		return key, nil
-
-	case "gcp-kms":
-		if gcpKMSKey != "" {
-			return gcpKMSKey, nil
-		}
-		var key string
-		err := huh.NewInput().
-			Title("Enter GCP KMS key resource ID").
-			Value(&key).
-			Validate(requiredValidator("GCP KMS key is required")).
-			Run()
-		if err != nil {
-			return "", fmt.Errorf("prompt failed: %w", err)
-		}
-		return key, nil
-
-	default:
-		return "", fmt.Errorf("unsupported provider: %s", provider)
-	}
 }
 
 func promptEnvironmentSecrets(env string) (*config.EnvironmentSecrets, error) {

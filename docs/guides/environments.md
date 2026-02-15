@@ -94,5 +94,5 @@ Currently all environments enable all components. To disable a component for a s
 
 1. Create `apps/values/<env>.yaml` with component toggles
 2. Create `values/<env>.yaml` in each component under `components/`
-3. Create `secrets.<env>.enc.yaml` with encrypted credentials
+3. Create `secrets.<env>.yaml` with credentials (git-crypt will encrypt in Git)
 4. Bootstrap with `./cli/cluster-bootstrap bootstrap <env>`

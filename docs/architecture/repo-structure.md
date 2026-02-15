@@ -35,8 +35,8 @@ cluster-bootstrap/
 │   └── go.sum
 ├── docs/                          # Documentation (this site)
 ├── mkdocs.yml                     # MkDocs configuration
+├── .gitattributes                 # git-crypt: secrets.*.yaml
 ├── .gitignore
-├── .sops.yaml                     # SOPS encryption rules
 └── README.md
 ```
 
@@ -65,12 +65,11 @@ Most components are thin wrappers around upstream Helm charts — `Chart.yaml` d
 
 ## `cli/` — Bootstrap CLI
 
-A Go application that automates cluster bootstrapping. Built with Cobra (CLI framework), it handles SOPS decryption, Helm installation, and Kubernetes resource creation. See the [CLI documentation](../cli/index.md) for details.
+A Go application that automates cluster bootstrapping. Built with Cobra (CLI framework), it reads git-crypt-protected secrets, installs Helm, and creates Kubernetes resources. See the [CLI documentation](../cli/index.md) for details.
 
 ## Config Files
 
 | File | Purpose |
 |------|---------|
-| `.sops.yaml` | SOPS encryption rules — defines which files to encrypt and with which key |
+| `.gitattributes` | git-crypt rules — `secrets.*.yaml` are encrypted in the repo |
 | `.gitignore` | Ignores charts/, secrets, binaries, IDE files, and MkDocs build output |
-| `age-key.txt` | Age private key for SOPS decryption (gitignored) |

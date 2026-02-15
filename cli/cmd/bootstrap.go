@@ -11,7 +11,6 @@ import (
 	"github.com/user-cube/cluster-bootstrap/cluster-bootstrap/internal/config"
 	"github.com/user-cube/cluster-bootstrap/cluster-bootstrap/internal/helm"
 	"github.com/user-cube/cluster-bootstrap/cluster-bootstrap/internal/k8s"
-	"github.com/user-cube/cluster-bootstrap/cluster-bootstrap/internal/sops"
 )
 
 var (
@@ -20,14 +19,13 @@ var (
 	skipArgoCDInstall bool
 	kubeconfig        string
 	kubeContext       string
-	bootstrapAgeKey   string
 )
 
 var bootstrapCmd = &cobra.Command{
 	Use:   "bootstrap <environment>",
 	Short: "Bootstrap a Kubernetes cluster with ArgoCD and secrets",
-	Long: `Decrypts the SOPS-encrypted secrets file, installs ArgoCD,
-creates Kubernetes secrets, and applies the App of Apps root Application.
+	Long: `Reads the git-crypt-protected secrets file (unlock repo first with git-crypt unlock),
+installs ArgoCD, creates Kubernetes secrets, and applies the App of Apps root Application.
 
 Replaces the manual install.sh process.`,
 	Args: cobra.ExactArgs(1),
@@ -35,12 +33,11 @@ Replaces the manual install.sh process.`,
 }
 
 func init() {
-	bootstrapCmd.Flags().StringVar(&secretsFile, "secrets-file", "", "path to SOPS-encrypted secrets file (default: secrets.<env>.enc.yaml)")
+	bootstrapCmd.Flags().StringVar(&secretsFile, "secrets-file", "", "path to secrets file (default: secrets.<env>.yaml)")
 	bootstrapCmd.Flags().BoolVar(&dryRun, "dry-run", false, "print manifests without applying")
 	bootstrapCmd.Flags().BoolVar(&skipArgoCDInstall, "skip-argocd-install", false, "skip ArgoCD installation")
 	bootstrapCmd.Flags().StringVar(&kubeconfig, "kubeconfig", "", "path to kubeconfig file")
 	bootstrapCmd.Flags().StringVar(&kubeContext, "context", "", "kubeconfig context to use")
-	bootstrapCmd.Flags().StringVar(&bootstrapAgeKey, "age-key-file", "", "path to age private key file for SOPS decryption")
 
 	rootCmd.AddCommand(bootstrapCmd)
 }
@@ -50,14 +47,13 @@ func runBootstrap(cmd *cobra.Command, args []string) error {
 
 	fmt.Printf("==> Bootstrapping cluster for environment: %s\n", env)
 
-	// Step 2: Decrypt secrets
+	// Step 2: Load secrets (ensure repo is unlocked: git-crypt unlock)
 	sf := secretsFile
 	if sf == "" {
 		sf = config.SecretsFileName(env)
 	}
-	fmt.Printf("==> Decrypting secrets from %s...\n", sf)
-	sopsOpts := &sops.Options{AgeKeyFile: bootstrapAgeKey}
-	envSecrets, err := config.LoadSecrets(sf, sopsOpts)
+	fmt.Printf("==> Loading secrets from %s...\n", sf)
+	envSecrets, err := config.LoadSecrets(sf)
 	if err != nil {
 		return err
 	}

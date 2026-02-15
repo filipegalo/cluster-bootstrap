@@ -13,7 +13,7 @@ var rootCmd = &cobra.Command{
 	Use:   "cluster-bootstrap",
 	Short: "CLI tool for bootstrapping Kubernetes clusters with ArgoCD",
 	Long: `cluster-bootstrap is a CLI tool that replaces the manual bootstrap process.
-It uses SOPS-encrypted secrets to configure ArgoCD, create Kubernetes secrets,
+It uses git-crypt-protected secrets to configure ArgoCD, create Kubernetes secrets,
 and deploy the App of Apps pattern.`,
 }
 

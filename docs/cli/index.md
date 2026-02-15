@@ -1,6 +1,6 @@
 # CLI Tool
 
-The `cluster-bootstrap` CLI automates cluster bootstrapping. Built in Go with [Cobra](https://github.com/spf13/cobra), it handles secret decryption, Helm installation, and Kubernetes resource creation.
+The `cluster-bootstrap` CLI automates cluster bootstrapping. Built in Go with [Cobra](https://github.com/spf13/cobra), it reads git-crypt-protected secrets, installs Helm charts, and creates Kubernetes resources.
 
 ## Building
 
@@ -33,7 +33,7 @@ Performs the full cluster bootstrap sequence.
 
 **What it does:**
 
-1. Decrypts `secrets.<env>.enc.yaml` using SOPS + age
+1. Loads `secrets.<env>.yaml` (unlock repo with `git-crypt unlock` first)
 2. Creates the `argocd` namespace
 3. Creates the `repo-ssh-key` Secret with Git SSH credentials
 4. Installs ArgoCD via Helm (from `components/argocd/`)
@@ -44,17 +44,16 @@ Performs the full cluster bootstrap sequence.
 
 | Flag | Default | Description |
 |------|---------|-------------|
-| `--secrets-file` | `secrets.<env>.enc.yaml` | Path to SOPS-encrypted secrets file |
+| `--secrets-file` | `secrets.<env>.yaml` | Path to secrets file |
 | `--dry-run` | `false` | Print manifests without applying |
 | `--skip-argocd-install` | `false` | Skip the Helm ArgoCD installation |
 | `--kubeconfig` | `~/.kube/config` | Path to kubeconfig file |
 | `--context` | current context | Kubeconfig context to use |
-| `--age-key-file` | `SOPS_AGE_KEY_FILE` env | Path to age private key |
 | `-v, --verbose` | `false` | Enable verbose output |
 
 ### `init`
 
-Interactive setup to create SOPS configuration and encrypted secrets files.
+Interactive setup for git-crypt and per-environment secrets files.
 
 ```bash
 ./cli/cluster-bootstrap init
@@ -62,20 +61,14 @@ Interactive setup to create SOPS configuration and encrypted secrets files.
 
 **What it does:**
 
-1. Prompts for SOPS provider (age, AWS KMS, or GCP KMS)
-2. Collects the encryption key
-3. Generates `.sops.yaml`
-4. Interactively collects per-environment secrets (repo URL, target revision, SSH key path)
-5. Creates encrypted `secrets.<env>.enc.yaml` files
+1. Updates `.gitattributes` so `secrets.*.yaml` are encrypted by git-crypt
+2. Interactively collects per-environment secrets (repo URL, target revision, SSH key path)
+3. Creates `secrets.<env>.yaml` files (encrypted in Git when committed)
 
 **Flags:**
 
 | Flag | Description |
 |------|-------------|
-| `--provider` | SOPS provider: `age`, `aws-kms`, or `gcp-kms` |
-| `--age-key-file` | Path to age public key file |
-| `--kms-arn` | AWS KMS key ARN |
-| `--gcp-kms-key` | GCP KMS key resource ID |
 | `--output-dir` | Output directory (default: current directory) |
 
 ### `vault-token`
@@ -106,6 +99,5 @@ The CLI uses these key libraries:
 |---------|---------|
 | `github.com/spf13/cobra` | CLI framework |
 | `github.com/charmbracelet/huh` | Interactive terminal UI |
-| `github.com/getsops/sops/v3` | SOPS encryption/decryption |
 | `helm.sh/helm/v3` | Helm SDK for chart installation |
 | `k8s.io/client-go` | Kubernetes API client |

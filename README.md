@@ -17,7 +17,7 @@ Online documentation available at [Cluster Boostrap Docs](https://user-cube.gith
 
 - `kubectl` configured with access to the target cluster
 - `helm` (for local template testing)
-- `sops` and `age` (for secrets encryption/decryption)
+- `git-crypt` (for secrets encryption in Git)
 - `go` 1.25+ (to build the CLI)
 - `task` (task runner for CLI development)
 - SSH private key with read access to this repo
@@ -45,7 +45,7 @@ task build
 
 This will:
 
-1. Decrypt environment secrets using SOPS + age
+1. Load environment secrets from `secrets.<env>.yaml` (run `git-crypt unlock` first)
 2. Create the `argocd` namespace and SSH credentials secret
 3. Install ArgoCD via Helm
 4. Deploy the root **App of Apps** Application
@@ -93,7 +93,7 @@ ArgoCD manages itself — changes pushed to this repo are automatically synced.
 | Command | Description |
 |---------|-------------|
 | `bootstrap <env>` | Full cluster bootstrap (decrypt secrets, install ArgoCD, deploy App of Apps) |
-| `init` | Interactive setup for SOPS config and encrypted secrets files |
+| `init` | Interactive setup for git-crypt and per-environment secrets files |
 | `vault-token` | Store Vault root token as Kubernetes secret |
 
 ## Environments

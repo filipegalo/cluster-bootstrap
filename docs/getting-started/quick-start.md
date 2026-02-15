@@ -13,7 +13,7 @@ This produces the `cluster-bootstrap` binary in the `cli/` directory.
 
 ## 2. Initialize secrets (first time only)
 
-Run the interactive init command to set up SOPS encryption and create per-environment secrets files:
+Run the interactive init command to set up git-crypt and create per-environment secrets files:
 
 ```bash
 ./cli/cluster-bootstrap init
@@ -21,11 +21,9 @@ Run the interactive init command to set up SOPS encryption and create per-enviro
 
 This will:
 
-1. Prompt you to choose a SOPS provider (age, AWS KMS, or GCP KMS)
-2. Collect your encryption key
-3. Generate a `.sops.yaml` configuration
-4. Interactively collect secrets for each environment (repo URL, target revision, SSH private key)
-5. Create encrypted `secrets.<env>.enc.yaml` files
+1. Update `.gitattributes` so `secrets.*.yaml` are encrypted by git-crypt
+2. Interactively collect secrets for each environment (repo URL, target revision, SSH private key)
+3. Create `secrets.<env>.yaml` files (encrypted in Git when you commit; run `git-crypt init` in the repo first if needed)
 
 ## 3. Bootstrap the cluster
 
@@ -37,7 +35,7 @@ Run the bootstrap command with your target environment:
 
 This performs the following steps:
 
-1. Decrypts environment secrets using SOPS + your age key
+1. Loads environment secrets from `secrets.<env>.yaml` (unlock the repo with `git-crypt unlock` first)
 2. Creates the `argocd` namespace
 3. Creates the `repo-ssh-key` Secret with your Git SSH credentials
 4. Installs ArgoCD via Helm (using `components/argocd/` chart and values)
@@ -48,13 +46,10 @@ This performs the following steps:
 
 ```bash
 # Use a specific secrets file
-./cli/cluster-bootstrap bootstrap dev --secrets-file ./my-secrets.enc.yaml
+./cli/cluster-bootstrap bootstrap dev --secrets-file ./my-secrets.yaml
 
 # Use a specific kubeconfig or context
 ./cli/cluster-bootstrap bootstrap dev --kubeconfig ~/.kube/my-config --context my-cluster
-
-# Specify age key location
-./cli/cluster-bootstrap bootstrap dev --age-key-file ./age-key.txt
 
 # Dry run — print manifests without applying
 ./cli/cluster-bootstrap bootstrap dev --dry-run

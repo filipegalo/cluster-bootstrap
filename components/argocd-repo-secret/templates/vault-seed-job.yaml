@@ -1,0 +1,68 @@
+{{- if and (eq .Values.provider "vault") .Values.vaultSeed.enabled }}
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: vault-seed-repo-ssh-key
+  namespace: {{ .Release.Namespace }}
+  annotations:
+    "helm.sh/hook": post-install,post-upgrade
+    "helm.sh/hook-delete-policy": before-hook-creation
+  labels:
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+spec:
+  backoffLimit: 5
+  template:
+    metadata:
+      labels:
+        app: vault-seed
+    spec:
+      restartPolicy: OnFailure
+      volumes:
+        - name: repo-ssh-key
+          secret:
+            secretName: repo-ssh-key
+      containers:
+        - name: vault-seed
+          image: hashicorp/vault:1.15.4
+          env:
+            - name: VAULT_ADDR
+              value: {{ .Values.vault.address | quote }}
+            - name: VAULT_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: vault-root-token
+                  key: token
+                  optional: true
+          volumeMounts:
+            - name: repo-ssh-key
+              mountPath: /secrets
+              readOnly: true
+          command:
+            - /bin/sh
+            - -ec
+            - |
+              # Wait for Vault to be ready
+              echo "Waiting for Vault to be ready..."
+              until vault status 2>/dev/null; do
+                echo "Vault not ready, retrying in 5s..."
+                sleep 5
+              done
+
+              # For dev mode, use the root token from env or default
+              if [ -z "$VAULT_TOKEN" ]; then
+                export VAULT_TOKEN="root"
+              fi
+
+              # Enable KV v2 secrets engine (ignore if already enabled)
+              vault secrets enable -path=secret kv-v2 2>/dev/null || echo "KV v2 already enabled"
+
+              # Read the SSH private key from the mounted secret
+              SSH_KEY=$(cat /secrets/sshPrivateKey)
+
+              # Write to Vault
+              echo "Seeding secret/{{ .Values.externalSecret.vaultSecretPath }}..."
+              vault kv put secret/{{ .Values.externalSecret.vaultSecretPath }} \
+                sshPrivateKey="$SSH_KEY"
+
+              echo "Vault secret seeded successfully!"
+{{- end }}

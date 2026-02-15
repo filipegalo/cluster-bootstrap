@@ -16,18 +16,18 @@ spec:
       labels:
         app: vault-config
     spec:
-      serviceAccountName: {{ .Release.Name }}-vault
+      serviceAccountName: vault
       restartPolicy: OnFailure
       containers:
         - name: vault-config
           image: hashicorp/vault:1.15.4
           env:
             - name: VAULT_ADDR
-              value: "http://{{ .Release.Name }}-vault.{{ .Release.Namespace }}.svc:8200"
+              value: "http://vault.{{ .Release.Namespace }}.svc:8200"
             - name: VAULT_TOKEN
               valueFrom:
                 secretKeyRef:
-                  name: {{ .Release.Name }}-vault-root-token
+                  name: vault-root-token
                   key: token
                   optional: true
           command:

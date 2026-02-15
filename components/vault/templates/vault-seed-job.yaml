@@ -49,6 +49,12 @@ spec:
               # Enable KV v2 secrets engine (ignore if already enabled)
               vault secrets enable -path=secret kv-v2 2>/dev/null || echo "KV v2 already enabled"
 
+              # Check if the secret already exists in Vault
+              if vault kv get secret/{{ .Values.vaultSeed.vaultSecretPath }} >/dev/null 2>&1; then
+                echo "Secret secret/{{ .Values.vaultSeed.vaultSecretPath }} already exists in Vault, skipping."
+                exit 0
+              fi
+
               # Read the SSH private key from the Kubernetes secret via the API
               echo "Reading repo-ssh-key from namespace {{ .Values.vaultSeed.secretNamespace }}..."
               KUBE_TOKEN=$(cat /var/run/secrets/kubernetes.io/serviceaccount/token)

@@ -5,9 +5,9 @@ metadata:
   name: vault-kubernetes-auth-config
   namespace: {{ .Release.Namespace }}
   annotations:
-    "helm.sh/hook": post-install,post-upgrade
-    "helm.sh/hook-delete-policy": before-hook-creation
-    "helm.sh/hook-weight": "0"
+    argocd.argoproj.io/hook: PostSync
+    argocd.argoproj.io/hook-delete-policy: BeforeHookCreation
+    argocd.argoproj.io/sync-wave: "0"
   labels:
     app.kubernetes.io/managed-by: {{ .Release.Service }}
 spec:

@@ -5,9 +5,9 @@ metadata:
   name: vault-auto-unseal
   namespace: {{ .Release.Namespace }}
   annotations:
-    "helm.sh/hook": post-install,post-upgrade
-    "helm.sh/hook-delete-policy": before-hook-creation
-    "helm.sh/hook-weight": "-10"
+    argocd.argoproj.io/hook: PostSync
+    argocd.argoproj.io/hook-delete-policy: BeforeHookCreation
+    argocd.argoproj.io/sync-wave: "-10"
   labels:
     app.kubernetes.io/managed-by: {{ .Release.Service }}
 spec:
@@ -73,13 +73,18 @@ spec:
               }
 
               # Wait for vault-0 to respond (may be sealed or uninitialized, but must be reachable)
+              # vault status exits: 0=unsealed, 1=error, 2=sealed/uninitialized
+              # We accept any response (exit 0 or 2) as "reachable"
               echo "Waiting for Vault to be reachable..."
-              until vault status -format=json 2>/dev/null; do
-                echo "Vault not reachable, retrying in 5s..."
+              while true; do
+                rc=0
+                STATUS=$(vault status -format=json 2>/dev/null) || rc=$?
+                if [ "$rc" -eq 0 ] || [ "$rc" -eq 2 ]; then
+                  break
+                fi
+                echo "Vault not reachable (rc=$rc), retrying in 5s..."
                 sleep 5
               done
-
-              STATUS=$(vault status -format=json 2>/dev/null)
               INITIALIZED=$(echo "$STATUS" | sed -n 's/.*"initialized"[[:space:]]*:[[:space:]]*\(true\|false\).*/\1/p')
               SEALED=$(echo "$STATUS" | sed -n 's/.*"sealed"[[:space:]]*:[[:space:]]*\(true\|false\).*/\1/p')
 
@@ -174,7 +179,14 @@ spec:
 
                   # Wait for replica to be reachable
                   RETRY=0
-                  until VAULT_ADDR="$REPLICA_ADDR" vault status -format=json 2>/dev/null; do
+                  REPLICA_REACHABLE="false"
+                  while true; do
+                    rc=0
+                    REPLICA_STATUS=$(VAULT_ADDR="$REPLICA_ADDR" vault status -format=json 2>/dev/null) || rc=$?
+                    if [ "$rc" -eq 0 ] || [ "$rc" -eq 2 ]; then
+                      REPLICA_REACHABLE="true"
+                      break
+                    fi
                     RETRY=$((RETRY+1))
                     if [ $RETRY -gt 30 ]; then
                       echo "WARNING: vault-${r} not reachable after 150s, skipping."
@@ -183,7 +195,10 @@ spec:
                     sleep 5
                   done
 
-                  REPLICA_STATUS=$(VAULT_ADDR="$REPLICA_ADDR" vault status -format=json 2>/dev/null || echo "")
+                  if [ "$REPLICA_REACHABLE" = "false" ]; then
+                    r=$((r+1))
+                    continue
+                  fi
                   REPLICA_SEALED=$(echo "$REPLICA_STATUS" | sed -n 's/.*"sealed"[[:space:]]*:[[:space:]]*\(true\|false\).*/\1/p')
 
                   if [ "$REPLICA_SEALED" = "true" ]; then

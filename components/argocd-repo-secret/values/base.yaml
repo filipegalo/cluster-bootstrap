@@ -13,9 +13,6 @@ aws:
   region: eu-west-1
   authSecret: aws-credentials
 
-vaultSeed:
-  enabled: false
-
 externalSecret:
   refreshInterval: 1h
   vaultSecretPath: argocd/repo-ssh-key

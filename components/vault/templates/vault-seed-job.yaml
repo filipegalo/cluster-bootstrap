@@ -1,4 +1,4 @@
-{{- if and (eq .Values.provider "vault") .Values.vaultSeed.enabled }}
+{{- if .Values.vaultSeed.enabled }}
 apiVersion: batch/v1
 kind: Job
 metadata:
@@ -16,27 +16,20 @@ spec:
       labels:
         app: vault-seed
     spec:
+      serviceAccountName: vault
       restartPolicy: OnFailure
-      volumes:
-        - name: repo-ssh-key
-          secret:
-            secretName: repo-ssh-key
       containers:
         - name: vault-seed
           image: hashicorp/vault:1.15.4
           env:
             - name: VAULT_ADDR
-              value: {{ .Values.vault.address | quote }}
+              value: "http://vault.{{ .Release.Namespace }}.svc:8200"
             - name: VAULT_TOKEN
               valueFrom:
                 secretKeyRef:
                   name: vault-root-token
                   key: token
                   optional: true
-          volumeMounts:
-            - name: repo-ssh-key
-              mountPath: /secrets
-              readOnly: true
           command:
             - /bin/sh
             - -ec
@@ -56,12 +49,24 @@ spec:
               # Enable KV v2 secrets engine (ignore if already enabled)
               vault secrets enable -path=secret kv-v2 2>/dev/null || echo "KV v2 already enabled"
 
-              # Read the SSH private key from the mounted secret
-              SSH_KEY=$(cat /secrets/sshPrivateKey)
+              # Read the SSH private key from the Kubernetes secret via the API
+              echo "Reading repo-ssh-key from namespace {{ .Values.vaultSeed.secretNamespace }}..."
+              KUBE_TOKEN=$(cat /var/run/secrets/kubernetes.io/serviceaccount/token)
+              SSH_KEY=$(wget -qO- \
+                --header "Authorization: Bearer ${KUBE_TOKEN}" \
+                "https://kubernetes.default.svc/api/v1/namespaces/{{ .Values.vaultSeed.secretNamespace }}/secrets/{{ .Values.vaultSeed.secretName }}" \
+                --no-check-certificate | \
+                sed -n 's/.*"{{ .Values.vaultSeed.secretKey }}"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | \
+                base64 -d)
+
+              if [ -z "$SSH_KEY" ]; then
+                echo "ERROR: Failed to read SSH key from secret {{ .Values.vaultSeed.secretNamespace }}/{{ .Values.vaultSeed.secretName }}"
+                exit 1
+              fi
 
               # Write to Vault
-              echo "Seeding secret/{{ .Values.externalSecret.vaultSecretPath }}..."
-              vault kv put secret/{{ .Values.externalSecret.vaultSecretPath }} \
+              echo "Seeding secret/{{ .Values.vaultSeed.vaultSecretPath }}..."
+              vault kv put secret/{{ .Values.vaultSeed.vaultSecretPath }} \
                 sshPrivateKey="$SSH_KEY"
 
               echo "Vault secret seeded successfully!"

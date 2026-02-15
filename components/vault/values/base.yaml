@@ -4,6 +4,13 @@ vault:
   ui:
     enabled: true
 
+vaultSeed:
+  enabled: true
+  secretName: repo-ssh-key
+  secretNamespace: argocd
+  secretKey: sshPrivateKey
+  vaultSecretPath: argocd/repo-ssh-key
+
 vaultConfig:
   enabled: true
   role: external-secrets

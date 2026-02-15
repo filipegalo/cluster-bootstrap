@@ -5,8 +5,6 @@ metadata:
   name: vault-seed-repo-ssh-key
   namespace: {{ .Release.Namespace }}
   annotations:
-    argocd.argoproj.io/hook: Sync
-    argocd.argoproj.io/hook-delete-policy: BeforeHookCreation
     argocd.argoproj.io/sync-wave: "30"
   labels:
     app.kubernetes.io/managed-by: {{ .Release.Service }}

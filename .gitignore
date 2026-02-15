@@ -28,3 +28,6 @@ repo-ssh-key.pem
 # MkDocs
 site/
 venv
+
+# Node
+node_modules/

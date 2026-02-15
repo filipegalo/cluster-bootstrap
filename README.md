@@ -2,28 +2,53 @@
 
 GitOps repo for bootstrapping Kubernetes clusters with ArgoCD using the **App of Apps** pattern.
 
+## Documentation
+
+Full documentation is available at the [MkDocs site](docs/index.md). To preview locally:
+
+```bash
+pip install mkdocs-material
+mkdocs serve
+```
+
 ## Prerequisites
 
 - `kubectl` configured with access to the target cluster
-- SSH private key with read access to this repo
 - `helm` (for local template testing)
+- `sops` and `age` (for secrets encryption/decryption)
+- `go` 1.25+ (to build the CLI)
+- `task` (task runner for CLI development)
+- SSH private key with read access to this repo
 
 ## Quick Start
 
-```bash
-export REPO_URL="git@github.com:org/cluster-bootstrap.git"
-export SSH_KEY_PATH="$HOME/.ssh/id_ed25519"
+### 1. Build the CLI
 
-./bootstrap/install.sh dev
+```bash
+cd cli
+task build
+```
+
+### 2. Initialize secrets (first time only)
+
+```bash
+./cli/cluster-bootstrap init
+```
+
+### 3. Bootstrap the cluster
+
+```bash
+./cli/cluster-bootstrap bootstrap dev
 ```
 
 This will:
 
-1. Install ArgoCD in the `argocd` namespace
-2. Create the SSH credentials secret for repo access
-3. Deploy the root **App of Apps** Application for the specified environment
+1. Decrypt environment secrets using SOPS + age
+2. Create the `argocd` namespace and SSH credentials secret
+3. Install ArgoCD via Helm
+4. Deploy the root **App of Apps** Application
 
-## Access ArgoCD UI
+### 4. Access ArgoCD UI
 
 ```bash
 kubectl port-forward svc/argocd-server -n argocd 8080:443
@@ -38,69 +63,36 @@ kubectl -n argocd get secret argocd-initial-admin-secret -o jsonpath='{.data.pas
 ## Architecture
 
 ```
-bootstrap/install.sh  →  ArgoCD + App of Apps (root Application)
-                              ↓
-                         apps/ (Helm chart generating Application CRs)
-                              ↓
-                    components/argocd/  (self-managed ArgoCD)
-                    components/xxx/    (other components)
+CLI bootstrap  →  ArgoCD + App of Apps (root Application)
+                        ↓
+                   apps/ (Helm chart generating Application CRs)
+                        ↓
+              components/argocd/  (self-managed ArgoCD)
+              components/xxx/    (other components)
 ```
 
 ArgoCD manages itself — changes pushed to this repo are automatically synced.
 
-## Adding a New Component
+## Components
 
-1. Create the component chart:
+| Component | Namespace | Sync Wave | Description |
+|-----------|-----------|-----------|-------------|
+| ArgoCD | `argocd` | 0 | Self-managed GitOps controller |
+| Vault | `vault` | 1 | Secrets management |
+| External Secrets | `external-secrets` | 1 | Syncs external secrets into Kubernetes |
+| Prometheus Operator CRDs | `monitoring` | 2 | CRDs for the monitoring stack |
+| ArgoCD Repo Secret | `argocd` | 2 | SSH credentials for repo access |
+| Reloader | `reloader` | 2 | Restarts pods on ConfigMap/Secret changes |
+| Kube Prometheus Stack | `monitoring` | 3 | Prometheus monitoring stack |
+| Trivy Operator | `trivy-system` | 3 | Vulnerability scanning |
 
-```
-components/my-component/
-├── Chart.yaml          # Helm dependency on the upstream chart
-└── values/
-    ├── base.yaml       # Shared config
-    ├── dev.yaml
-    ├── staging.yaml
-    └── prod.yaml
-```
+## CLI Commands
 
-2. Create the Application template in `apps/templates/my-component.yaml`:
-
-```yaml
-{{- if .Values.myComponent.enabled }}
-apiVersion: argoproj.io/v1alpha1
-kind: Application
-metadata:
-  name: my-component
-  namespace: argocd
-  finalizers:
-    - resources-finalizer.argocd.argoproj.io
-spec:
-  project: default
-  source:
-    repoURL: {{ .Values.repo.url }}
-    targetRevision: {{ .Values.repo.targetRevision }}
-    path: components/my-component
-    helm:
-      valueFiles:
-        - values/base.yaml
-        - values/{{ .Values.environment }}.yaml
-  destination:
-    server: https://kubernetes.default.svc
-    namespace: my-component
-  syncPolicy:
-    automated:
-      prune: true
-      selfHeal: true
-    syncOptions:
-      - CreateNamespace=true
-{{- end }}
-```
-
-3. Enable in each environment's values file (`apps/values/{env}.yaml`):
-
-```yaml
-myComponent:
-  enabled: true
-```
+| Command | Description |
+|---------|-------------|
+| `bootstrap <env>` | Full cluster bootstrap (decrypt secrets, install ArgoCD, deploy App of Apps) |
+| `init` | Interactive setup for SOPS config and encrypted secrets files |
+| `vault-token` | Store Vault root token as Kubernetes secret |
 
 ## Environments
 

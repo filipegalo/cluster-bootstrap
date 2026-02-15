@@ -1,0 +1,64 @@
+# Components Overview
+
+All platform components are deployed as ArgoCD Applications through the App of Apps pattern. Each component lives under `components/<name>/` as a Helm chart wrapper.
+
+## Component Table
+
+| Component | Namespace | Sync Wave | Upstream Chart | Version |
+|-----------|-----------|-----------|---------------|---------|
+| [ArgoCD](argocd.md) | `argocd` | 0 | `argo-cd` | 7.8.13 |
+| [Vault](vault.md) | `vault` | 1 | `vault` | 0.29.1 |
+| [External Secrets](external-secrets.md) | `external-secrets` | 1 | `external-secrets` | 0.14.3 |
+| [Prometheus Operator CRDs](prometheus-operator-crds.md) | `monitoring` | 2 | `prometheus-operator-crds` | 27.0.0 |
+| [ArgoCD Repo Secret](argocd-repo-secret.md) | `argocd` | 2 | Custom | — |
+| [Reloader](reloader.md) | `reloader` | 2 | `reloader` | 2.2.8 |
+| [Kube Prometheus Stack](kube-prometheus-stack.md) | `monitoring` | 3 | `kube-prometheus-stack` | 82.0.0 |
+| [Trivy Operator](trivy-operator.md) | `trivy-system` | 3 | `trivy-operator` | 0.32.0 |
+
+## Component Pattern
+
+Each component follows the same structure:
+
+```
+components/<name>/
+├── Chart.yaml          # Declares upstream dependency
+├── templates/          # Optional custom templates
+└── values/
+    ├── base.yaml       # Shared configuration
+    ├── dev.yaml        # Dev overrides
+    ├── staging.yaml    # Staging overrides
+    └── prod.yaml       # Prod overrides
+```
+
+### Chart.yaml
+
+Most components declare a single upstream Helm chart as a dependency:
+
+```yaml
+apiVersion: v2
+name: <component>
+version: 0.1.0
+dependencies:
+  - name: <upstream-chart>
+    version: <version>
+    repository: <helm-repo-url>
+```
+
+### Values Cascade
+
+ArgoCD applies values files in order:
+
+1. `values/base.yaml` — defaults shared across environments
+2. `values/<env>.yaml` — environment-specific overrides
+
+Environment values take precedence over base values. This allows setting sensible defaults in base while adjusting replicas, resources, and features per environment.
+
+### ArgoCD Application
+
+Each component has a corresponding Application template in `apps/templates/` that:
+
+- Sets the target namespace
+- Configures the sync wave annotation
+- References the component's Helm chart path
+- Specifies both values files
+- Enables automated sync with prune and self-heal

@@ -1,0 +1,66 @@
+site_name: Cluster Bootstrap
+site_description: GitOps Kubernetes cluster bootstrapping with ArgoCD
+repo_url: https://github.com/user-cube/cluster-bootstrap
+repo_name: user-cube/cluster-bootstrap
+
+theme:
+  name: material
+  palette:
+    - scheme: default
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    - scheme: slate
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+  features:
+    - navigation.sections
+    - navigation.expand
+    - navigation.top
+    - search.highlight
+    - content.code.copy
+
+nav:
+  - Home: index.md
+  - Getting Started:
+      - Prerequisites: getting-started/prerequisites.md
+      - Quick Start: getting-started/quick-start.md
+  - Architecture:
+      - Overview: architecture/overview.md
+      - Repo Structure: architecture/repo-structure.md
+  - Components:
+      - Overview: components/index.md
+      - ArgoCD: components/argocd.md
+      - Vault: components/vault.md
+      - External Secrets: components/external-secrets.md
+      - ArgoCD Repo Secret: components/argocd-repo-secret.md
+      - Prometheus Operator CRDs: components/prometheus-operator-crds.md
+      - Kube Prometheus Stack: components/kube-prometheus-stack.md
+      - Reloader: components/reloader.md
+      - Trivy Operator: components/trivy-operator.md
+  - Guides:
+      - Adding a Component: guides/adding-a-component.md
+      - Secrets Management: guides/secrets-management.md
+      - Environments: guides/environments.md
+  - CLI:
+      - Overview: cli/index.md
+
+markdown_extensions:
+  - admonition
+  - pymdownx.details
+  - pymdownx.superfences
+  - pymdownx.tabbed:
+      alternate_style: true
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.inlinehilite
+  - tables
+  - attr_list
+  - md_in_html
+  - toc:
+      permalink: true

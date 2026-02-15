@@ -24,3 +24,7 @@ cli/cluster-bootstrap
 age-key.txt
 repo-ssh-key.pem
 .env
+
+# MkDocs
+site/
+venv

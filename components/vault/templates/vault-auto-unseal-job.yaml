@@ -79,7 +79,7 @@ spec:
                 # rc=2 means sealed or uninitialized — check init status
                 STATUS_TEXT=$(vexec status 2>&1 || true)
                 echo "Status output: ${STATUS_TEXT}"
-                if echo "$STATUS_TEXT" | grep -q "Vault is not initialized"; then
+                if echo "$STATUS_TEXT" | grep -q "Vault is not initialized" || echo "$STATUS_TEXT" | grep -qE "Initialized\s+false"; then
                   INITIALIZED="false"
                   SEALED="true"
                 else

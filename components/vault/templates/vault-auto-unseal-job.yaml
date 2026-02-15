@@ -34,7 +34,7 @@ spec:
             - name: VAULT_POD
               value: "vault-0"
           command:
-            - /bin/bash
+            - /bin/sh
             - -ec
             - |
               # Helper: run vault commands via kubectl exec

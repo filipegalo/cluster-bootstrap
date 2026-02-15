@@ -1,0 +1,26 @@
+{{- if .Values.vaultSeed.enabled }}
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: vault-seed-secret-reader
+  namespace: {{ .Values.vaultSeed.secretNamespace }}
+rules:
+  - apiGroups: [""]
+    resources: ["secrets"]
+    resourceNames: [{{ .Values.vaultSeed.secretName | quote }}]
+    verbs: ["get"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: vault-seed-secret-reader
+  namespace: {{ .Values.vaultSeed.secretNamespace }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: vault-seed-secret-reader
+subjects:
+  - kind: ServiceAccount
+    name: vault
+    namespace: {{ .Release.Namespace }}
+{{- end }}

@@ -1,6 +1,27 @@
 kube-prometheus-stack:
   crds:
-    enabled: false
+    enabled: true
+    upgradeJob:
+      enabled: true
+      forceConflicts: true
+      annotations:
+        argocd.argoproj.io/hook: PreSync
+
+  prometheusOperator:
+    admissionWebhooks:
+      annotations:
+        argocd.argoproj.io/hook: PreSync
+        argocd.argoproj.io/hook-delete-policy: HookSucceeded
+      mutatingWebhookConfiguration:
+        annotations:
+          argocd.argoproj.io/hook: PreSync
+      validatingWebhookConfiguration:
+        annotations:
+          argocd.argoproj.io/hook: PreSync
+      patch:
+        annotations:
+          argocd.argoproj.io/hook: PreSync
+          argocd.argoproj.io/hook-delete-policy: HookSucceeded
 
   grafana:
     enabled: false

@@ -105,13 +105,18 @@ spec:
                   -key-threshold="${KEY_THRESHOLD}" \
                   -format=json)
 
-                ROOT_TOKEN=$(echo "$INIT_OUTPUT" | grep -o '"root_token":"[^"]*"' | cut -d'"' -f4)
+                echo "Init output: ${INIT_OUTPUT}"
+                ROOT_TOKEN=$(echo "$INIT_OUTPUT" | sed -n 's/.*"root_token" *: *"\([^"]*\)".*/\1/p')
+                echo "Root token extracted: ${ROOT_TOKEN}"
 
-                # Build kubectl create secret command args
+                # Extract unseal keys from JSON array — one per line
+                UNSEAL_KEYS=$(echo "$INIT_OUTPUT" | sed -n '/"unseal_keys_b64"/,/]/p' | grep '"' | tr -d ' ",')
+                echo "Unseal keys extracted: ${UNSEAL_KEYS}"
+
+                # Build kubectl create secret command
                 SECRET_ARGS="--from-literal=root-token=${ROOT_TOKEN}"
                 i=0
-                while [ $i -lt ${KEY_SHARES} ]; do
-                  KEY=$(echo "$INIT_OUTPUT" | grep -o '"unseal_keys_b64":\[[^]]*\]' | tr ',' '\n' | tr -d '[]" ' | sed -n "$((i+1))p" | sed 's/unseal_keys_b64://')
+                for KEY in ${UNSEAL_KEYS}; do
                   SECRET_ARGS="${SECRET_ARGS} --from-literal=unseal-key-${i}=${KEY}"
                   i=$((i+1))
                 done
@@ -143,7 +148,8 @@ spec:
                 while [ $i -lt ${KEY_THRESHOLD} ]; do
                   KEY=$(kubectl get secret -n "${NAMESPACE}" "${SECRET_NAME}" -o jsonpath="{.data.unseal-key-${i}}" | base64 -d)
                   echo "Applying unseal key $((i+1))/${KEY_THRESHOLD}..."
-                  vexec operator unseal "$KEY"
+                  kubectl exec -n "${NAMESPACE}" "${VAULT_POD}" -- \
+                    sh -c "VAULT_ADDR=http://127.0.0.1:8200 vault operator unseal ${KEY}"
                   i=$((i+1))
                 done
 

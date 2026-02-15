@@ -5,3 +5,6 @@ vault:
 
 externalSecret:
   repoUrl: git@github.com:user-cube/cluster-bootstrap.git
+
+vaultSeed:
+  enabled: true

@@ -14,7 +14,7 @@ aws:
   authSecret: aws-credentials
 
 vaultSeed:
-  enabled: true
+  enabled: false
 
 externalSecret:
   refreshInterval: 1h

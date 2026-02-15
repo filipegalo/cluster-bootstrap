@@ -29,12 +29,6 @@ spec:
                   name: vault-root-token
                   key: token
                   optional: true
-            - name: VAULT_AUTO_UNSEAL_TOKEN
-              valueFrom:
-                secretKeyRef:
-                  name: {{ .Values.vaultAutoUnseal.secretName | default "vault-unseal-keys" }}
-                  key: root-token
-                  optional: true
           command:
             - /bin/sh
             - -ec
@@ -46,10 +40,8 @@ spec:
                 sleep 5
               done
 
-              # Resolve root token: explicit > auto-unseal > dev default
-              if [ -z "$VAULT_TOKEN" ] && [ -n "$VAULT_AUTO_UNSEAL_TOKEN" ]; then
-                export VAULT_TOKEN="$VAULT_AUTO_UNSEAL_TOKEN"
-              elif [ -z "$VAULT_TOKEN" ]; then
+              # For dev mode, use the root token from env or default
+              if [ -z "$VAULT_TOKEN" ]; then
                 export VAULT_TOKEN="root"
               fi
 

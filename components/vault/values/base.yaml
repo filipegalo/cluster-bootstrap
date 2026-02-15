@@ -4,12 +4,6 @@ vault:
   ui:
     enabled: true
 
-vaultAutoUnseal:
-  enabled: false
-  secretName: vault-unseal-keys
-  keyShares: 1
-  keyThreshold: 1
-
 vaultSeed:
   enabled: true
   secretName: repo-ssh-key

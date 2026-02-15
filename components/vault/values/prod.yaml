@@ -11,5 +11,3 @@ vault:
       raft:
         enabled: true
 
-vaultAutoUnseal:
-  enabled: true

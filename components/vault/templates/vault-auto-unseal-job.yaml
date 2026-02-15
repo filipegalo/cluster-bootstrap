@@ -43,22 +43,27 @@ spec:
                   env VAULT_ADDR=http://127.0.0.1:8200 vault "$@"
               }
 
-              # Wait for vault-0 pod to be running
+              # Wait for vault-0 pod to be running (not Ready — it won't be ready until unsealed)
               echo "Waiting for ${VAULT_POD} to be running..."
-              kubectl wait -n "${NAMESPACE}" "pod/${VAULT_POD}" \
-                --for=condition=Ready --timeout=300s 2>/dev/null || true
+              while true; do
+                PHASE=$(kubectl get pod -n "${NAMESPACE}" "${VAULT_POD}" -o jsonpath='{.status.phase}' 2>/dev/null || echo "")
+                if [ "$PHASE" = "Running" ]; then
+                  break
+                fi
+                echo "Pod phase: ${PHASE:-not found}, retrying in 5s..."
+                sleep 5
+              done
 
               # Wait for Vault to respond (sealed or uninitialized counts as responding)
               echo "Waiting for Vault to be reachable..."
               while true; do
-                if vexec status -format=json >/dev/null 2>&1; then
+                rc=0
+                vexec status -format=json >/dev/null 2>&1 || rc=$?
+                # 0 = unsealed, 2 = sealed/uninitialized but reachable
+                if [ "$rc" -eq 0 ] || [ "$rc" -eq 2 ]; then
                   break
                 fi
-                # exit code 2 = sealed/uninitialized but reachable
-                if vexec status -format=json 2>/dev/null; rc=$?; [ "$rc" = "2" ]; then
-                  break
-                fi
-                echo "Vault not reachable, retrying in 5s..."
+                echo "Vault not reachable (rc=$rc), retrying in 5s..."
                 sleep 5
               done
 

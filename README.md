@@ -11,6 +11,8 @@ pip install mkdocs-material
 mkdocs serve
 ```
 
+Online documentation available at [Cluster Boostrap Docs](https://user-cube.github.io/cluster-bootstrap/)
+
 ## Prerequisites
 
 - `kubectl` configured with access to the target cluster

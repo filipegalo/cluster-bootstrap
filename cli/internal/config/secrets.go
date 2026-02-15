@@ -21,19 +21,6 @@ type RepoSecrets struct {
 	SSHPrivateKey  string `yaml:"sshPrivateKey"`
 }
 
-// ValidEnvironments lists the allowed environment names.
-var ValidEnvironments = []string{"dev", "staging", "prod"}
-
-// IsValidEnvironment checks if the given environment name is valid.
-func IsValidEnvironment(env string) bool {
-	for _, e := range ValidEnvironments {
-		if e == env {
-			return true
-		}
-	}
-	return false
-}
-
 // SecretsFileName returns the secrets file name for the given environment.
 func SecretsFileName(env string) string {
 	return fmt.Sprintf("secrets.%s.enc.yaml", env)

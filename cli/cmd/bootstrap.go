@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"strings"
 
 	"github.com/spf13/cobra"
 
@@ -48,12 +47,6 @@ func init() {
 
 func runBootstrap(cmd *cobra.Command, args []string) error {
 	env := args[0]
-
-	// Step 1: Validate environment
-	if !config.IsValidEnvironment(env) {
-		return fmt.Errorf("invalid environment %q, must be one of: %s",
-			env, strings.Join(config.ValidEnvironments, ", "))
-	}
 
 	fmt.Printf("==> Bootstrapping cluster for environment: %s\n", env)
 

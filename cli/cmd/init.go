@@ -70,30 +70,34 @@ func runInit(cmd *cobra.Command, args []string) error {
 	}
 	fmt.Printf("Created %s\n", sopsConfigPath)
 
-	// Step 4: Prompt and create per-environment secrets files
+	// Step 4: Prompt for environment names and create per-environment secrets files
 	created := 0
-	for _, env := range config.ValidEnvironments {
-		outputFile := filepath.Join(outputDir, config.SecretsFileName(env))
-		alreadyExists := false
-		if _, err := os.Stat(outputFile); err == nil {
-			alreadyExists = true
-		}
-
-		title := fmt.Sprintf("Configure environment %q?", env)
-		if alreadyExists {
-			title = fmt.Sprintf("Reconfigure environment %q? (%s already exists)", env, config.SecretsFileName(env))
-		}
-
-		var configure bool
-		err := huh.NewConfirm().
-			Title(title).
-			Value(&configure).
+	for {
+		var env string
+		err := huh.NewInput().
+			Title("Environment name (leave empty to finish)").
+			Value(&env).
 			Run()
 		if err != nil {
 			return fmt.Errorf("prompt failed: %w", err)
 		}
-		if !configure {
-			continue
+		if env == "" {
+			break
+		}
+
+		outputFile := filepath.Join(outputDir, config.SecretsFileName(env))
+		if _, statErr := os.Stat(outputFile); statErr == nil {
+			var overwrite bool
+			err := huh.NewConfirm().
+				Title(fmt.Sprintf("%s already exists. Overwrite?", config.SecretsFileName(env))).
+				Value(&overwrite).
+				Run()
+			if err != nil {
+				return fmt.Errorf("prompt failed: %w", err)
+			}
+			if !overwrite {
+				continue
+			}
 		}
 
 		envSecrets, err := promptEnvironmentSecrets(env)

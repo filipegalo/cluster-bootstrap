@@ -18,14 +18,15 @@ var (
 	ageKeyFile string
 	kmsARN     string
 	gcpKMSKey  string
-	output     string
+	outputDir  string
 )
 
 var initCmd = &cobra.Command{
 	Use:   "init",
-	Short: "Interactive setup to create .sops.yaml and secrets.enc.yaml",
-	Long: `Interactively configure SOPS encryption and create an encrypted secrets file.
-Prompts for the SOPS provider, encryption key, and per-environment secrets.`,
+	Short: "Interactive setup to create .sops.yaml and per-environment secrets files",
+	Long: `Interactively configure SOPS encryption and create encrypted secrets files.
+Prompts for the SOPS provider, encryption key, and per-environment secrets.
+Each environment gets its own file: secrets.<env>.enc.yaml`,
 	RunE: runInit,
 }
 
@@ -34,7 +35,7 @@ func init() {
 	initCmd.Flags().StringVar(&ageKeyFile, "age-key-file", "", "path to age public key file (for age provider)")
 	initCmd.Flags().StringVar(&kmsARN, "kms-arn", "", "AWS KMS key ARN (for aws-kms provider)")
 	initCmd.Flags().StringVar(&gcpKMSKey, "gcp-kms-key", "", "GCP KMS key resource ID (for gcp-kms provider)")
-	initCmd.Flags().StringVar(&output, "output", "secrets.enc.yaml", "output path for encrypted secrets file")
+	initCmd.Flags().StringVar(&outputDir, "output-dir", ".", "directory for encrypted secrets files")
 
 	rootCmd.AddCommand(initCmd)
 }
@@ -63,21 +64,29 @@ func runInit(cmd *cobra.Command, args []string) error {
 	}
 
 	// Step 3: Write .sops.yaml
-	sopsConfigPath := filepath.Join(filepath.Dir(output), ".sops.yaml")
+	sopsConfigPath := filepath.Join(outputDir, ".sops.yaml")
 	if err := config.WriteSopsConfig(sopsConfigPath, provider, key); err != nil {
 		return err
 	}
 	fmt.Printf("Created %s\n", sopsConfigPath)
 
-	// Step 4: Prompt for environment secrets
-	secrets := config.SecretsFile{
-		Environments: make(map[string]config.EnvironmentSecrets),
-	}
-
+	// Step 4: Prompt and create per-environment secrets files
+	created := 0
 	for _, env := range config.ValidEnvironments {
+		outputFile := filepath.Join(outputDir, config.SecretsFileName(env))
+		alreadyExists := false
+		if _, err := os.Stat(outputFile); err == nil {
+			alreadyExists = true
+		}
+
+		title := fmt.Sprintf("Configure environment %q?", env)
+		if alreadyExists {
+			title = fmt.Sprintf("Reconfigure environment %q? (%s already exists)", env, config.SecretsFileName(env))
+		}
+
 		var configure bool
 		err := huh.NewConfirm().
-			Title(fmt.Sprintf("Configure environment %q?", env)).
+			Title(title).
 			Value(&configure).
 			Run()
 		if err != nil {
@@ -91,37 +100,36 @@ func runInit(cmd *cobra.Command, args []string) error {
 		if err != nil {
 			return err
 		}
-		secrets.Environments[env] = *envSecrets
+
+		// Step 5: Write plaintext YAML to temp file, encrypt with SOPS
+		plaintextData, err := yaml.Marshal(envSecrets)
+		if err != nil {
+			return fmt.Errorf("failed to marshal secrets: %w", err)
+		}
+
+		tmpFile := filepath.Join(outputDir, ".tmp.enc.yaml")
+		if err := os.WriteFile(tmpFile, plaintextData, 0600); err != nil {
+			return fmt.Errorf("failed to write temp file: %w", err)
+		}
+
+		encrypted, err := sops.Encrypt(tmpFile, nil)
+		os.Remove(tmpFile)
+		if err != nil {
+			return fmt.Errorf("failed to encrypt secrets for %s: %w", env, err)
+		}
+
+		if err := os.WriteFile(outputFile, encrypted, 0600); err != nil {
+			return fmt.Errorf("failed to write %s: %w", outputFile, err)
+		}
+
+		fmt.Printf("Created %s (encrypted)\n", outputFile)
+		created++
 	}
 
-	if len(secrets.Environments) == 0 {
+	if created == 0 {
 		return fmt.Errorf("no environments configured")
 	}
 
-	// Step 5: Write plaintext YAML to temp file, encrypt with SOPS
-	plaintextData, err := yaml.Marshal(secrets)
-	if err != nil {
-		return fmt.Errorf("failed to marshal secrets: %w", err)
-	}
-
-	// Use a temp file that matches the .sops.yaml path_regex (\.enc\.yaml$)
-	dir := filepath.Dir(output)
-	tmpFile := filepath.Join(dir, ".tmp.enc.yaml")
-	if err := os.WriteFile(tmpFile, plaintextData, 0600); err != nil {
-		return fmt.Errorf("failed to write temp file: %w", err)
-	}
-	defer os.Remove(tmpFile)
-
-	encrypted, err := sops.Encrypt(tmpFile, nil)
-	if err != nil {
-		return fmt.Errorf("failed to encrypt secrets: %w", err)
-	}
-
-	if err := os.WriteFile(output, encrypted, 0600); err != nil {
-		return fmt.Errorf("failed to write encrypted secrets: %w", err)
-	}
-
-	fmt.Printf("Created %s (encrypted)\n", output)
 	fmt.Println("\nYou can now run: cluster-bootstrap bootstrap <environment>")
 
 	return nil

@@ -17,7 +17,7 @@ secrets/
 
 # Binaries
 cli/cluster-bootstrap
-secrets.enc.yaml
+*.enc.yaml
 .sops.yaml
 
 # Sops

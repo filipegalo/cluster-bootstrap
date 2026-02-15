@@ -8,12 +8,8 @@ import (
 	"github.com/user-cube/cluster-bootstrap/cluster-bootstrap/internal/sops"
 )
 
-// SecretsFile represents the top-level structure of secrets.enc.yaml.
-type SecretsFile struct {
-	Environments map[string]EnvironmentSecrets `yaml:"environments"`
-}
-
 // EnvironmentSecrets holds the secrets for a single environment.
+// Each environment has its own secrets file: secrets.<env>.enc.yaml
 type EnvironmentSecrets struct {
 	Repo RepoSecrets `yaml:"repo"`
 }
@@ -38,26 +34,22 @@ func IsValidEnvironment(env string) bool {
 	return false
 }
 
-// LoadSecrets decrypts and parses the SOPS-encrypted secrets file.
-func LoadSecrets(filePath string, sopsOpts *sops.Options) (*SecretsFile, error) {
+// SecretsFileName returns the secrets file name for the given environment.
+func SecretsFileName(env string) string {
+	return fmt.Sprintf("secrets.%s.enc.yaml", env)
+}
+
+// LoadSecrets decrypts and parses a per-environment SOPS-encrypted secrets file.
+func LoadSecrets(filePath string, sopsOpts *sops.Options) (*EnvironmentSecrets, error) {
 	plaintext, err := sops.Decrypt(filePath, sopsOpts)
 	if err != nil {
 		return nil, fmt.Errorf("failed to decrypt secrets: %w", err)
 	}
 
-	var secrets SecretsFile
+	var secrets EnvironmentSecrets
 	if err := yaml.Unmarshal(plaintext, &secrets); err != nil {
 		return nil, fmt.Errorf("failed to parse secrets: %w", err)
 	}
 
 	return &secrets, nil
-}
-
-// GetEnvironment returns the secrets for a specific environment.
-func (s *SecretsFile) GetEnvironment(env string) (*EnvironmentSecrets, error) {
-	envSecrets, ok := s.Environments[env]
-	if !ok {
-		return nil, fmt.Errorf("environment %q not found in secrets file", env)
-	}
-	return &envSecrets, nil
 }

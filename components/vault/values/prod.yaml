@@ -10,3 +10,6 @@ vault:
       replicas: 3
       raft:
         enabled: true
+
+vaultAutoUnseal:
+  enabled: true

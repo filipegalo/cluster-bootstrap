@@ -36,7 +36,7 @@ Replaces the manual install.sh process.`,
 }
 
 func init() {
-	bootstrapCmd.Flags().StringVar(&secretsFile, "secrets-file", "secrets.enc.yaml", "path to SOPS-encrypted secrets file")
+	bootstrapCmd.Flags().StringVar(&secretsFile, "secrets-file", "", "path to SOPS-encrypted secrets file (default: secrets.<env>.enc.yaml)")
 	bootstrapCmd.Flags().BoolVar(&dryRun, "dry-run", false, "print manifests without applying")
 	bootstrapCmd.Flags().BoolVar(&skipArgoCDInstall, "skip-argocd-install", false, "skip ArgoCD installation")
 	bootstrapCmd.Flags().StringVar(&kubeconfig, "kubeconfig", "", "path to kubeconfig file")
@@ -58,14 +58,13 @@ func runBootstrap(cmd *cobra.Command, args []string) error {
 	fmt.Printf("==> Bootstrapping cluster for environment: %s\n", env)
 
 	// Step 2: Decrypt secrets
-	fmt.Println("==> Decrypting secrets...")
-	sopsOpts := &sops.Options{AgeKeyFile: bootstrapAgeKey}
-	secrets, err := config.LoadSecrets(secretsFile, sopsOpts)
-	if err != nil {
-		return err
+	sf := secretsFile
+	if sf == "" {
+		sf = config.SecretsFileName(env)
 	}
-
-	envSecrets, err := secrets.GetEnvironment(env)
+	fmt.Printf("==> Decrypting secrets from %s...\n", sf)
+	sopsOpts := &sops.Options{AgeKeyFile: bootstrapAgeKey}
+	envSecrets, err := config.LoadSecrets(sf, sopsOpts)
 	if err != nil {
 		return err
 	}

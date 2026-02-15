@@ -19,7 +19,7 @@ func EnsureGitCryptAttributes(outputDir string) error {
 	}
 
 	content := string(data)
-	if strings.Contains(content, "secrets.") && strings.Contains(content, "git-crypt") {
+	if strings.Contains(content, GitCryptAttributesPattern) {
 		return nil // already configured
 	}
 

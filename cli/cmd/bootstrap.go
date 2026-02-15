@@ -47,7 +47,7 @@ func runBootstrap(cmd *cobra.Command, args []string) error {
 
 	fmt.Printf("==> Bootstrapping cluster for environment: %s\n", env)
 
-	// Step 2: Load secrets (ensure repo is unlocked: git-crypt unlock)
+	// Step 1: Load secrets (ensure repo is unlocked: git-crypt unlock)
 	sf := secretsFile
 	if sf == "" {
 		sf = config.SecretsFileName(env)
@@ -67,7 +67,7 @@ func runBootstrap(cmd *cobra.Command, args []string) error {
 		return printDryRun(envSecrets, env)
 	}
 
-	// Step 3: Create k8s client
+	// Step 2: Create k8s client
 	client, err := k8s.NewClient(kubeconfig, kubeContext)
 	if err != nil {
 		return fmt.Errorf("failed to create kubernetes client: %w", err)
@@ -75,7 +75,7 @@ func runBootstrap(cmd *cobra.Command, args []string) error {
 
 	ctx := context.Background()
 
-	// Step 4: Create Kubernetes secrets (before Helm install, as the chart may reference them)
+	// Step 3: Create Kubernetes secrets (before Helm install, as the chart may reference them)
 	fmt.Println("==> Creating Kubernetes secrets...")
 	if err := client.EnsureNamespace(ctx, "argocd"); err != nil {
 		return err
@@ -84,7 +84,7 @@ func runBootstrap(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	// Step 5: Install ArgoCD via Helm
+	// Step 4: Install ArgoCD via Helm
 	if !skipArgoCDInstall {
 		fmt.Println("==> Installing ArgoCD via Helm...")
 		if err := helm.InstallArgoCD(ctx, kubeconfig, kubeContext, env, verbose); err != nil {
@@ -92,13 +92,13 @@ func runBootstrap(cmd *cobra.Command, args []string) error {
 		}
 	}
 
-	// Step 6: Apply App of Apps
+	// Step 5: Apply App of Apps
 	fmt.Printf("==> Applying App of Apps for environment: %s\n", env)
 	if _, err := client.ApplyAppOfApps(ctx, envSecrets.Repo.URL, envSecrets.Repo.TargetRevision, env, false); err != nil {
 		return err
 	}
 
-	// Step 7: Print access instructions
+	// Step 6: Print access instructions
 	fmt.Println("\n==> Done! ArgoCD is installed and the app-of-apps root Application has been created.")
 	fmt.Println("    Access the ArgoCD UI:")
 	fmt.Println("      kubectl port-forward svc/argocd-server -n argocd 8080:443")

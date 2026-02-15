@@ -33,6 +33,12 @@ func init() {
 }
 
 func runInit(cmd *cobra.Command, args []string) error {
+	// Step 0: Verify git-crypt is initialized
+	gitCryptDir := filepath.Join(outputDir, ".git", "git-crypt")
+	if _, err := os.Stat(gitCryptDir); os.IsNotExist(err) {
+		return fmt.Errorf("git-crypt is not initialized in this repo — run 'git-crypt init' first")
+	}
+
 	// Step 1: Ensure .gitattributes has git-crypt pattern for secrets.*.yaml
 	gitattributesPath := filepath.Join(outputDir, ".gitattributes")
 	if err := config.EnsureGitCryptAttributes(outputDir); err != nil {
@@ -92,8 +98,7 @@ func runInit(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("no environments configured")
 	}
 
-	fmt.Println("\nIf the repo is not yet using git-crypt, run: git-crypt init")
-	fmt.Println("Then run: cluster-bootstrap bootstrap <environment>")
+	fmt.Println("\nYou can now run: cluster-bootstrap bootstrap <environment>")
 
 	return nil
 }

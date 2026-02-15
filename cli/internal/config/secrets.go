@@ -1,11 +1,15 @@
 package config
 
 import (
+	"bytes"
 	"fmt"
 	"os"
 
 	"gopkg.in/yaml.v3"
 )
+
+// gitCryptMagic is the header written by git-crypt to encrypted files.
+var gitCryptMagic = []byte("\x00GITCRYPT")
 
 // EnvironmentSecrets holds the secrets for a single environment.
 // Each environment has its own secrets file: secrets.<env>.yaml (git-crypt encrypted in repo).
@@ -31,6 +35,10 @@ func LoadSecrets(filePath string) (*EnvironmentSecrets, error) {
 	data, err := os.ReadFile(filePath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read secrets: %w", err)
+	}
+
+	if bytes.HasPrefix(data, gitCryptMagic) {
+		return nil, fmt.Errorf("secrets file %s is still encrypted — run 'git-crypt unlock' first", filePath)
 	}
 
 	var secrets EnvironmentSecrets

@@ -1,0 +1,147 @@
+{{- if .Values.vaultAutoUnseal.enabled }}
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: vault-auto-unseal
+  namespace: {{ .Release.Namespace }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "10"
+  labels:
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+spec:
+  backoffLimit: 5
+  template:
+    metadata:
+      labels:
+        app: vault-auto-unseal
+    spec:
+      serviceAccountName: vault
+      restartPolicy: OnFailure
+      containers:
+        - name: vault-auto-unseal
+          image: bitnami/kubectl:latest
+          env:
+            - name: VAULT_ADDR
+              value: "http://vault.{{ .Release.Namespace }}.svc:8200"
+            - name: SECRET_NAME
+              value: {{ .Values.vaultAutoUnseal.secretName | quote }}
+            - name: NAMESPACE
+              value: {{ .Release.Namespace }}
+            - name: KEY_SHARES
+              value: {{ .Values.vaultAutoUnseal.keyShares | quote }}
+            - name: KEY_THRESHOLD
+              value: {{ .Values.vaultAutoUnseal.keyThreshold | quote }}
+            - name: VAULT_POD
+              value: "vault-0"
+          command:
+            - /bin/bash
+            - -ec
+            - |
+              # Helper: run vault commands via kubectl exec
+              vexec() {
+                kubectl exec -n "${NAMESPACE}" "${VAULT_POD}" -- \
+                  env VAULT_ADDR=http://127.0.0.1:8200 vault "$@"
+              }
+
+              # Wait for vault-0 pod to be running
+              echo "Waiting for ${VAULT_POD} to be running..."
+              kubectl wait -n "${NAMESPACE}" "pod/${VAULT_POD}" \
+                --for=condition=Ready --timeout=300s 2>/dev/null || true
+
+              # Wait for Vault to respond (sealed or uninitialized counts as responding)
+              echo "Waiting for Vault to be reachable..."
+              while true; do
+                if vexec status -format=json >/dev/null 2>&1; then
+                  break
+                fi
+                # exit code 2 = sealed/uninitialized but reachable
+                if vexec status -format=json 2>/dev/null; rc=$?; [ "$rc" = "2" ]; then
+                  break
+                fi
+                echo "Vault not reachable, retrying in 5s..."
+                sleep 5
+              done
+
+              STATUS=$(vexec status -format=json 2>/dev/null || true)
+              INITIALIZED=$(echo "$STATUS" | grep -o '"initialized":[a-z]*' | cut -d: -f2)
+              SEALED=$(echo "$STATUS" | grep -o '"sealed":[a-z]*' | cut -d: -f2)
+
+              echo "Vault status: initialized=${INITIALIZED}, sealed=${SEALED}"
+
+              # Check if unseal keys secret already exists
+              HAS_SECRET="false"
+              if kubectl get secret -n "${NAMESPACE}" "${SECRET_NAME}" >/dev/null 2>&1; then
+                HAS_SECRET="true"
+              fi
+
+              # --- INIT if needed ---
+              if [ "$INITIALIZED" = "false" ]; then
+                echo "Vault is not initialized. Initializing with ${KEY_SHARES} shares, threshold ${KEY_THRESHOLD}..."
+                INIT_OUTPUT=$(vexec operator init \
+                  -key-shares="${KEY_SHARES}" \
+                  -key-threshold="${KEY_THRESHOLD}" \
+                  -format=json)
+
+                ROOT_TOKEN=$(echo "$INIT_OUTPUT" | grep -o '"root_token":"[^"]*"' | cut -d'"' -f4)
+
+                # Build kubectl create secret command args
+                SECRET_ARGS="--from-literal=root-token=${ROOT_TOKEN}"
+                i=0
+                while [ $i -lt ${KEY_SHARES} ]; do
+                  KEY=$(echo "$INIT_OUTPUT" | grep -o '"unseal_keys_b64":\[[^]]*\]' | tr ',' '\n' | tr -d '[]" ' | sed -n "$((i+1))p" | sed 's/unseal_keys_b64://')
+                  SECRET_ARGS="${SECRET_ARGS} --from-literal=unseal-key-${i}=${KEY}"
+                  i=$((i+1))
+                done
+
+                if [ "$HAS_SECRET" = "true" ]; then
+                  echo "Deleting old secret ${SECRET_NAME}..."
+                  kubectl delete secret -n "${NAMESPACE}" "${SECRET_NAME}"
+                fi
+
+                echo "Creating K8s secret ${SECRET_NAME}..."
+                eval kubectl create secret generic "${SECRET_NAME}" -n "${NAMESPACE}" ${SECRET_ARGS}
+
+                echo "Vault initialized. Keys stored in secret ${NAMESPACE}/${SECRET_NAME}."
+                SEALED="true"
+                HAS_SECRET="true"
+              fi
+
+              # --- UNSEAL if needed ---
+              if [ "$SEALED" = "true" ]; then
+                echo "Vault is sealed. Unsealing..."
+
+                if [ "$HAS_SECRET" = "false" ]; then
+                  echo "ERROR: Vault is sealed but no unseal keys found in secret ${NAMESPACE}/${SECRET_NAME}."
+                  echo "Please unseal Vault manually or delete the Vault PVC and re-deploy."
+                  exit 1
+                fi
+
+                i=0
+                while [ $i -lt ${KEY_THRESHOLD} ]; do
+                  KEY=$(kubectl get secret -n "${NAMESPACE}" "${SECRET_NAME}" -o jsonpath="{.data.unseal-key-${i}}" | base64 -d)
+                  echo "Applying unseal key $((i+1))/${KEY_THRESHOLD}..."
+                  vexec operator unseal "$KEY"
+                  i=$((i+1))
+                done
+
+                echo "vault-0 unsealed successfully."
+              else
+                echo "Vault is already unsealed."
+              fi
+
+              # --- Store root token in vault-root-token secret for other Jobs ---
+              ROOT_TOKEN=$(kubectl get secret -n "${NAMESPACE}" "${SECRET_NAME}" -o jsonpath="{.data.root-token}" | base64 -d)
+              if [ -n "$ROOT_TOKEN" ]; then
+                if kubectl get secret -n "${NAMESPACE}" vault-root-token >/dev/null 2>&1; then
+                  kubectl patch secret -n "${NAMESPACE}" vault-root-token \
+                    -p "{\"stringData\":{\"token\":\"${ROOT_TOKEN}\"}}"
+                  echo "Updated vault-root-token secret."
+                else
+                  kubectl create secret generic vault-root-token -n "${NAMESPACE}" \
+                    --from-literal=token="${ROOT_TOKEN}"
+                  echo "Created vault-root-token secret."
+                fi
+              fi
+
+              echo "Vault auto-unseal complete!"
+{{- end }}

@@ -67,9 +67,27 @@ spec:
                 sleep 5
               done
 
-              STATUS=$(vexec status -format=json 2>/dev/null || true)
-              INITIALIZED=$(echo "$STATUS" | grep -o '"initialized":[a-z]*' | cut -d: -f2)
-              SEALED=$(echo "$STATUS" | grep -o '"sealed":[a-z]*' | cut -d: -f2)
+              # Get vault status — capture output even on non-zero exit
+              STATUS=$(vexec status -format=json 2>&1 || true)
+              echo "Raw status: ${STATUS}"
+
+              # Parse JSON — handle both with and without spaces around colons
+              INITIALIZED=$(echo "$STATUS" | sed -n 's/.*"initialized" *: *\(true\|false\).*/\1/p')
+              SEALED=$(echo "$STATUS" | sed -n 's/.*"sealed" *: *\(true\|false\).*/\1/p')
+
+              # Fallback: if parsing failed, check exit code directly
+              if [ -z "$INITIALIZED" ]; then
+                rc=0
+                vexec status >/dev/null 2>&1 || rc=$?
+                if [ "$rc" -eq 2 ]; then
+                  # Could be sealed or uninitialized — try init to find out
+                  INITIALIZED="false"
+                  SEALED="true"
+                elif [ "$rc" -eq 0 ]; then
+                  INITIALIZED="true"
+                  SEALED="false"
+                fi
+              fi
 
               echo "Vault status: initialized=${INITIALIZED}, sealed=${SEALED}"
 
@@ -135,7 +153,7 @@ spec:
               fi
 
               # --- Store root token in vault-root-token secret for other Jobs ---
-              ROOT_TOKEN=$(kubectl get secret -n "${NAMESPACE}" "${SECRET_NAME}" -o jsonpath="{.data.root-token}" | base64 -d)
+              ROOT_TOKEN=$(kubectl get secret -n "${NAMESPACE}" "${SECRET_NAME}" -o jsonpath="{.data.root-token}" 2>/dev/null | base64 -d 2>/dev/null || echo "")
               if [ -n "$ROOT_TOKEN" ]; then
                 if kubectl get secret -n "${NAMESPACE}" vault-root-token >/dev/null 2>&1; then
                   kubectl patch secret -n "${NAMESPACE}" vault-root-token \
